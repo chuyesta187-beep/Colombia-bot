@@ -1,0 +1,25 @@
+{
+  "name": "community-colombia-bot",
+  "version": "1.0.0",
+  "description": "🌴 Bot multifuncional para Community Colombia con tickets, postulaciones, allys, affys, roles y moderación.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node index.js"
+  },
+  "keywords": [
+    "discord",
+    "discordjs",
+    "bot",
+    "community-colombia",
+    "tickets",
+    "moderation"
+  ],
+  "author": "NEROX_YT",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.21.0",
+    "dotenv": "^17.2.1",
+    "express": "^5.1.0"
+  }
+}
