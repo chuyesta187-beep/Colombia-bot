@@ -1,0 +1,26 @@
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('set-affy-channel')
+    .setDescription('Configura el canal de AFFY')
+    .addChannelOption(option =>
+      option.setName('canal')
+        .setDescription('Canal donde se enviarán los AFFY')
+        .setRequired(true)
+    )
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  async execute(interaction) {
+
+    const canal = interaction.options.getChannel('canal');
+
+    // 🔥 guardar ID del canal
+    interaction.client.affyChannelId = canal.id;
+
+    await interaction.reply({
+      content: `📢 Canal de AFFY configurado en ${canal}`,
+      ephemeral: true
+    });
+  }
+};
