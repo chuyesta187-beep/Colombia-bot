@@ -80,7 +80,7 @@ client.on('interactionCreate', async (interaction) => {
         }
 
         const embedPanel = new EmbedBuilder()
-            .setTitle('══『🌴 NEROX GUARD SUPPORT』══')
+            .setTitle('══『🌴 COMMUNITY COLOMBIA ❤️』══')
             .setDescription(
                 'Bienvenido al centro de soporte técnico.\n\n' +
                 'Si necesitas asistencia, reportar un problema o realizar una consulta, ' +
