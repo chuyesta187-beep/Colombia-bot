@@ -1,225 +1,238 @@
-const express = require("express");
-const {
-  Client,
-  GatewayIntentBits,
-  EmbedBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  PermissionsBitField,
-  ChannelType,
-  SlashCommandBuilder,
-  REST,
-  Routes,
-  StringSelectMenuBuilder,
-} = require("discord.js");
+const { 
+    Client, 
+    GatewayIntentBits, 
+    Partials, 
+    Collection, 
+    EmbedBuilder, 
+    ActionRowBuilder, 
+    ButtonBuilder, 
+    ButtonStyle 
+} = require('discord.js');
+const express = require('express');
+require('dotenv').config();
 
-// ================= EXPRESS =================
+// ==========================================
+// 1. SERVIDOR EXPRESS (Para Render 24/7)
+// ==========================================
 const app = express();
-app.get("/", (req, res) => res.send("Ticket bot online"));
-app.listen(3000);
+const PORT = process.env.PORT || 3000;
 
-// ================= CONFIG (ENV) =================
-const TOKEN = process.env.TOKEN;
-const CLIENT_ID = process.env.CLIENT_ID;
-const GUILD_ID = process.env.GUILD_ID;
+app.get('/', (req, res) => {
+    res.send({ status: "online", bot: "Nerox Guard", version: "6.5.0" });
+});
 
-const STAFF_ROLE_ID = process.env.STAFF_ROLE_ID; 
-const LOGS_CHANNEL_ID = process.env.LOGS_CHANNEL_ID;
-const CATEGORY_ID = process.env.CATEGORY_ID;
+app.listen(PORT, () => {
+    console.log(`[SERVER] Servidor Express corriendo en el puerto ${PORT}`);
+});
 
-// ================= CLIENT =================
+// ==========================================
+// 2. CONFIGURACIÓN DEL CLIENTE DISCORD
+// ==========================================
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds],
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildMembers
+    ],
+    partials: [Partials.Channel, Partials.Message, Partials.User]
 });
 
-// ================= SLASH COMMAND =================
-const commands = [
-  new SlashCommandBuilder()
-    .setName("panel")
-    .setDescription("Crea el panel de tickets"),
-].map(c => c.toJSON());
+// ID del rol de Staff permitido para gestionar los tickets
+const STAFF_ROLE_ID = "1523178739653939240";
+// ID del canal donde llegarán los logs de los tickets
+const LOGS_CHANNEL_ID = "TU_ID_DE_CANAL_DE_LOGS"; 
 
-const rest = new REST({ version: "10" }).setToken(TOKEN);
+// ==========================================
+// 3. EVENTO: BOT LISTO Y REGISTRO DE COMANDOS
+// ==========================================
+client.once('ready', async () => {
+    console.log(`[BOT] Conectado exitosamente como ${client.user.tag}`);
+    
+    // Registrar el comando /panel de forma global
+    const data = [
+        {
+            name: 'panel',
+            description: 'Despliega el panel premium de soporte técnico.',
+        }
+    ];
 
-(async () => {
-  try {
-    await rest.put(
-      Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-      { body: commands }
-    );
-    console.log("✅ Slash command registrado");
-  } catch (err) {
-    console.log(err);
-  }
-})();
-
-// ================= READY =================
-client.once("ready", () => {
-  console.log(`🤖 Bot listo como ${client.user.tag}`);
+    try {
+        await client.application.commands.set(data);
+        console.log('[BOT] Comando global /panel registrado correctamente.');
+    } catch (error) {
+        console.error('[ERROR] Error al registrar comandos:', error);
+    }
 });
 
-// ================= LOGS =================
-async function sendLog(guild, text) {
-  const channel = guild.channels.cache.get(LOGS_CHANNEL_ID);
-  if (!channel) return;
+// ==========================================
+// 4. MANEJO DE INTERACCIONES (Comandos y Botones)
+// ==========================================
+client.on('interactionCreate', async (interaction) => {
+    
+    // --- MANEJO DEL COMANDO /PANEL ---
+    if (interaction.isChatInputCommand()) {
+        if (interaction.commandName === 'panel') {
+            // Verificar si el usuario es administrador para ejecutar el comando del panel
+            if (!interaction.member.permissions.has('Administrator')) {
+                return interaction.reply({ 
+                    content: '❌ No tienes permisos de Administrador para usar este comando.', 
+                    ephemeral: true 
+                });
+            }
 
-  const embed = new EmbedBuilder()
-    .setTitle("📜 Ticket Log")
-    .setDescription(text)
-    .setColor("Red")
-    .setTimestamp();
+            const embedPanel = new EmbedBuilder()
+                .setTitle('══『🌴 NEROX GUARD SUPPORT』══')
+                .setDescription(
+                    'Bienvenido al centro de soporte técnico.\n\n' +
+                    'Si necesitas asistencia, reportar un problema o realizar una consulta, ' +
+                    'selecciona el botón de abajo para abrir un ticket de atención privada.\n\n' +
+                    '**📌 Nota:** El mal uso de este sistema conllevó a una sanción.'
+                )
+                .setColor('#0b0b0b') // Estética Premium AMOLED/Black
+                .setImage('https://i.imgur.com/EjemplodeBannerPremium.png') // Opcional: Banner decorativo
+                .setFooter({ text: 'Nerox Guard • Sistema de Seguridad y Soporte', iconURL: client.user.displayAvatarURL() })
+                .setTimestamp();
 
-  channel.send({ embeds: [embed] });
-}
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId('open_ticket')
+                    .setLabel('Abrir Ticket')
+                    .setEmoji('📩')
+                    .setStyle(ButtonStyle.Secondary) // Estilo gris oscuro/premium
+            );
 
-// ================= INTERACTIONS =================
-client.on("interactionCreate", async (interaction) => {
-
-  // ===== /panel =====
-  if (interaction.isChatInputCommand()) {
-    if (interaction.commandName === "panel") {
-
-      const embed = new EmbedBuilder()
-        .setTitle("🎫 Sistema de Tickets")
-        .setDescription(
-          "Selecciona una opción para abrir un ticket:\n\n" +
-          "📌 Soporte\n📌 Reportes\n📌 Compras\n📌 Bugs"
-        )
-        .setColor("Blue");
-
-      const menu = new StringSelectMenuBuilder()
-        .setCustomId("ticket_select")
-        .setPlaceholder("📌 Selecciona una opción")
-        .addOptions(
-          { label: "Soporte", value: "soporte" },
-          { label: "Reportes", value: "reportes" },
-          { label: "Compras", value: "compras" },
-          { label: "Bug", value: "bug" }
-        );
-
-      return interaction.reply({
-        embeds: [embed],
-        components: [new ActionRowBuilder().addComponents(menu)],
-      });
-    }
-  }
-
-  // ===== SELECT MENU =====
-  if (interaction.isStringSelectMenu()) {
-    if (interaction.customId === "ticket_select") {
-
-      const member = interaction.member;
-      const guild = interaction.guild;
-
-      const existing = guild.channels.cache.find(
-        c => c.name === `ticket-${member.id}`
-      );
-
-      if (existing) {
-        return interaction.reply({
-          content: "❌ Ya tienes un ticket abierto",
-          ephemeral: true,
-        });
-      }
-
-      const channel = await guild.channels.create({
-        name: `ticket-${member.id}`,
-        type: ChannelType.GuildText,
-        parent: CATEGORY_ID,
-        permissionOverwrites: [
-          {
-            id: guild.id,
-            deny: [PermissionsBitField.Flags.ViewChannel],
-          },
-          {
-            id: member.id,
-            allow: [
-              PermissionsBitField.Flags.ViewChannel,
-              PermissionsBitField.Flags.SendMessages,
-            ],
-          },
-          {
-            id: STAFF_ROLE_ID,
-            allow: [
-              PermissionsBitField.Flags.ViewChannel,
-              PermissionsBitField.Flags.SendMessages,
-            ],
-          },
-        ],
-      });
-
-      const embed = new EmbedBuilder()
-        .setTitle("🎫 Ticket Abierto")
-        .setDescription("Un staff puede reclamar este ticket")
-        .setColor("Green");
-
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId("ticket_claim")
-          .setLabel("Reclamar")
-          .setStyle(ButtonStyle.Primary),
-
-        new ButtonBuilder()
-          .setCustomId("ticket_close")
-          .setLabel("Cerrar")
-          .setStyle(ButtonStyle.Danger)
-      );
-
-      await channel.send({
-        content: `<@&${STAFF_ROLE_ID}> <@${member.id}>`,
-        embeds: [embed],
-        components: [row],
-      });
-
-      await sendLog(guild, `🎫 Ticket creado por <@${member.id}> en ${channel}`);
-
-      return interaction.reply({
-        content: `✅ Ticket creado: ${channel}`,
-        ephemeral: true,
-      });
-    }
-  }
-
-  // ===== BOTONES =====
-  if (!interaction.isButton()) return;
-
-  const { guild, member, channel } = interaction;
-
-  // ===== CLAIM =====
-  if (interaction.customId === "ticket_claim") {
-
-    if (!member.roles.cache.has(STAFF_ROLE_ID)) {
-      return interaction.reply({
-        content: "❌ Solo staff puede reclamar tickets",
-        ephemeral: true,
-      });
+            await interaction.reply({ content: '✅ Panel enviado correctamente.', ephemeral: true });
+            return interaction.channel.send({ embeds: [embedPanel], components: [row] });
+        }
     }
 
-    await interaction.reply(`👮 Ticket reclamado por ${member}`);
+    // --- MANEJO DE BOTONES (Tickets, Reclamar, Cerrar) ---
+    if (interaction.isButton()) {
+        const { customId, member, guild, channel } = interaction;
 
-    await sendLog(guild, `👮 <@${member.id}> reclamó ${channel}`);
-  }
+        // 1. Creación del Ticket
+        if (customId === 'open_ticket') {
+            await interaction.deferReply({ ephemeral: true });
 
-  // ===== CLOSE =====
-  if (interaction.customId === "ticket_close") {
+            // Evitar que abran múltiples tickets si ya existe uno (Opcional, basado en el nombre del canal)
+            const channelName = `ticket-${member.user.username.toLowerCase()}`.replace(/[^a-z0-9-]/g, '');
+            const existingChannel = guild.channels.cache.find(c => c.name === channelName);
 
-    if (!member.roles.cache.has(STAFF_ROLE_ID)) {
-      return interaction.reply({
-        content: "❌ Solo staff puede cerrar tickets",
-        ephemeral: true,
-      });
+            if (existingChannel) {
+                return interaction.editReply({ content: `❌ Ya tienes un ticket abierto en ${existingChannel}.` });
+            }
+
+            // Crear el canal de ticket de forma privada
+            const ticketChannel = await guild.channels.create({
+                name: channelName,
+                type: 0, // GuildText
+                permissionOverwrites: [
+                    {
+                        id: guild.id,
+                        deny: ['ViewChannel'], // Oculto para todos
+                    },
+                    {
+                        id: member.id,
+                        allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'AttachFiles'], // Permisos al creador
+                    },
+                    {
+                        id: STAFF_ROLE_ID,
+                        allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'AttachFiles'], // Permisos al Staff
+                    }
+                ],
+            });
+
+            const embedTicket = new EmbedBuilder()
+                .setTitle('══『 Ticket Creado 』══')
+                .setDescription(
+                    `Hola ${member},\n\n` +
+                    'Gracias por contactar con el soporte. El equipo de soporte se pondrá en contacto contigo lo antes posible.\n\n' +
+                    'Por favor, ve detallando tu consulta, reporte o duda junto con las capturas/IDs necesarias para agilizar el proceso.'
+                )
+                .setColor('#0b0b0b')
+                .addFields(
+                    { name: '👤 Usuario:', value: `${member.user.tag} (\`${member.id}\`)`, inline: true },
+                    { name: '🔒 Estado:', value: '⏳ Esperando asignación de Staff', inline: true }
+                )
+                .setFooter({ text: 'Nerox Guard • Gestión Segura' })
+                .setTimestamp();
+
+            const actionRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId('claim_ticket')
+                    .setLabel('Reclamar')
+                    .setEmoji('👤')
+                    .setStyle(ButtonStyle.Success),
+                new ButtonBuilder()
+                    .setCustomId('close_ticket')
+                    .setLabel('Cerrar')
+                    .setEmoji('🔒')
+                    .setStyle(ButtonStyle.Danger)
+            );
+
+            await ticketChannel.send({ content: `${member} | <@&${STAFF_ROLE_ID}>`, embeds: [embedTicket], components: [actionRow] });
+            return interaction.editReply({ content: `✅ Tu ticket ha sido creado con éxito en ${ticketChannel}` });
+        }
+
+        // 2. Reclamar Ticket
+        if (customId === 'claim_ticket') {
+            // Validación estricta de Staff
+            if (!member.roles.cache.has(STAFF_ROLE_ID)) {
+                return interaction.reply({ content: '❌ No tienes permisos para reclamar este ticket.', ephemeral: true });
+            }
+
+            await interaction.deferUpdate();
+
+            // Editar el embed original para reflejar el reclamo
+            const originalEmbed = interaction.message.embeds[0];
+            const updatedEmbed = EmbedBuilder.from(originalEmbed)
+                .setColor('#2f3136')
+                .spliceFields(1, 1, { name: '🔒 Estado:', value: `👤 Reclamado por ${member.user}`, inline: true });
+
+            // Deshabilitar el botón de reclamar, mantener el de cerrar
+            const updatedRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('claim_ticket').setLabel('Reclamado').setEmoji('✅').setStyle(ButtonStyle.Success).setDisabled(true),
+                new ButtonBuilder().setCustomId('close_ticket').setLabel('Cerrar').setEmoji('🔒').setStyle(ButtonStyle.Danger)
+            );
+
+            await interaction.message.edit({ embeds: [updatedEmbed], components: [updatedRow] });
+            return channel.send({ content: `📌 El ticket ha sido tomado por el agente de soporte ${member.user}.` });
+        }
+
+        // 3. Cerrar Ticket (Con sistema de Logs)
+        if (customId === 'close_ticket') {
+            // Validación estricta de Staff
+            if (!member.roles.cache.has(STAFF_ROLE_ID)) {
+                return interaction.reply({ content: '❌ No tienes permisos para cerrar este ticket.', ephemeral: true });
+            }
+
+            await interaction.reply({ content: '🔒 Cerrando el ticket de manera permanente en 5 segundos...' });
+
+            // Sistema de Logs antes de borrar el canal
+            setTimeout(async () => {
+                const logChannel = guild.channels.cache.get(LOGS_CHANNEL_ID);
+                
+                if (logChannel) {
+                    const embedLog = new EmbedBuilder()
+                        .setTitle('══『 Log: Ticket Cerrado 』══')
+                        .setColor('#ff4747')
+                        .addFields(
+                            { name: '📝 Canal:', value: `\`${channel.name}\``, inline: true },
+                            { name: '👤 Cerrado por:', value: `${member.user.tag} (\`${member.id}\`)`, inline: true }
+                        )
+                        .setTimestamp();
+                    
+                    try { logChannel.send({ embeds: [embedLog] }); } catch (e) { console.error(e); }
+                }
+
+                await channel.delete().catch(err => console.error("Error al borrar el canal:", err));
+            }, 5000);
+        }
     }
-
-    await interaction.reply("🔴 Cerrando ticket...");
-
-    await sendLog(guild, `🔴 Ticket cerrado en ${channel} por <@${member.id}>`);
-
-    setTimeout(() => {
-      channel.delete().catch(() => {});
-    }, 2000);
-  }
 });
 
-// ================= LOGIN =================
-client.login(TOKEN);
+// ==========================================
+// 5. LOGIN DEL BOT
+// ==========================================
+client.login(process.env.TOKEN);
