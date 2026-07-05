@@ -2,14 +2,18 @@ const {
     Client, 
     GatewayIntentBits, 
     Partials, 
-    Collection, 
     EmbedBuilder, 
     ActionRowBuilder, 
     ButtonBuilder, 
-    ButtonStyle 
+    ButtonStyle,
+    PermissionFlagsBits,
+    ActivityType,
+    PresenceUpdateStatus,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle
 } = require('discord.js');
 const express = require('express');
-require('dotenv').config();
 
 // ==========================================
 // 1. SERVIDOR EXPRESS (Para Render 24/7)
@@ -21,9 +25,7 @@ app.get('/', (req, res) => {
     res.send({ status: "online", bot: "Nerox Guard", version: "6.5.0" });
 });
 
-app.listen(PORT, () => {
-    console.log(`[SERVER] Servidor Express corriendo en el puerto ${PORT}`);
-});
+app.listen(PORT, () => console.log(`[SERVER] Servidor Express activo en puerto ${PORT}`));
 
 // ==========================================
 // 2. CONFIGURACIÓN DEL CLIENTE DISCORD
@@ -33,123 +35,102 @@ const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.DirectMessages 
     ],
     partials: [Partials.Channel, Partials.Message, Partials.User]
 });
 
-// ID del rol de Staff permitido para gestionar los tickets
-const STAFF_ROLE_ID = "1523178739653939240";
-// ID del canal donde llegarán los logs de los tickets
-const LOGS_CHANNEL_ID = "TU_ID_DE_CANAL_DE_LOGS"; 
+// VARIABLES DE CONFIGURACIÓN FIJAS
+const STAFF_ROLE_ID = "1522834090506719302";      
+const LOGS_CHANNEL_ID = "1522850070276608121";    
+const CATEGORY_ID = "1522856204345413692";        
+const REVIEWS_CHANNEL_ID = "1522833540478406766";  
+
+// 🧠 CACHE TEMPORAL EN MEMORIA (Evita superar los 100 caracteres del customId)
+const ticketCache = new Map();
 
 // ==========================================
-// 3. EVENTO: BOT LISTO Y REGISTRO DE COMANDOS
+// 3. EVENTO: BOT READY Y PRESENCIA
 // ==========================================
 client.once('ready', async () => {
     console.log(`[BOT] Conectado exitosamente como ${client.user.tag}`);
-    
-    // Registrar el comando /panel de forma global
-    const data = [
-        {
-            name: 'panel',
-            description: 'Despliega el panel premium de soporte técnico.',
-        }
-    ];
+    client.user.setPresence({
+        status: PresenceUpdateStatus.DoNotDisturb,
+        activities: [{ name: "🎫 Tickets | /panel", type: ActivityType.Watching }]
+    });
 
+    const commandsData = [{ name: 'panel', description: 'Despliega el panel premium de soporte técnico.' }];
     try {
-        await client.application.commands.set(data);
-        console.log('[BOT] Comando global /panel registrado correctamente.');
+        await client.application.commands.set(commandsData);
     } catch (error) {
-        console.error('[ERROR] Error al registrar comandos:', error);
+        console.error('[ERROR] Fallo al registrar comandos:', error);
     }
 });
 
 // ==========================================
-// 4. MANEJO DE INTERACCIONES (Comandos y Botones)
+// 4. CONTROLADOR DE INTERACCIONES
 // ==========================================
 client.on('interactionCreate', async (interaction) => {
     
-    // --- MANEJO DEL COMANDO /PANEL ---
-    if (interaction.isChatInputCommand()) {
-        if (interaction.commandName === 'panel') {
-            // Verificar si el usuario es administrador para ejecutar el comando del panel
-            if (!interaction.member.permissions.has('Administrator')) {
-                return interaction.reply({ 
-                    content: '❌ No tienes permisos de Administrador para usar este comando.', 
-                    ephemeral: true 
-                });
-            }
-
-            const embedPanel = new EmbedBuilder()
-                .setTitle('══『🌴 NEROX GUARD SUPPORT』══')
-                .setDescription(
-                    'Bienvenido al centro de soporte técnico.\n\n' +
-                    'Si necesitas asistencia, reportar un problema o realizar una consulta, ' +
-                    'selecciona el botón de abajo para abrir un ticket de atención privada.\n\n' +
-                    '**📌 Nota:** El mal uso de este sistema conllevó a una sanción.'
-                )
-                .setColor('#0b0b0b') // Estética Premium AMOLED/Black
-                .setImage('https://i.imgur.com/EjemplodeBannerPremium.png') // Opcional: Banner decorativo
-                .setFooter({ text: 'Nerox Guard • Sistema de Seguridad y Soporte', iconURL: client.user.displayAvatarURL() })
-                .setTimestamp();
-
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId('open_ticket')
-                    .setLabel('Abrir Ticket')
-                    .setEmoji('📩')
-                    .setStyle(ButtonStyle.Secondary) // Estilo gris oscuro/premium
-            );
-
-            await interaction.reply({ content: '✅ Panel enviado correctamente.', ephemeral: true });
-            return interaction.channel.send({ embeds: [embedPanel], components: [row] });
+    // --- 4.1. COMANDO SLASH /PANEL ---
+    if (interaction.isChatInputCommand() && interaction.commandName === 'panel') {
+        if (!interaction.member.permissions.has(PermissionFlagsBits.Administrator)) {
+            return interaction.reply({ content: '❌ No tienes permisos de Administrador.', ephemeral: true });
         }
+
+        const embedPanel = new EmbedBuilder()
+            .setTitle('══『🌴 NEROX GUARD SUPPORT』══')
+            .setDescription(
+                'Bienvenido al centro de soporte técnico.\n\n' +
+                'Si necesitas asistencia, reportar un problema o realizar una consulta, ' +
+                'selecciona el botón de abajo para abrir un ticket de atención privada.\n\n' +
+                '**📌 Nota:** El mal uso de este sistema conllevará sanciones.'
+            )
+            .setColor('#0b0b0b')
+            .setFooter({ text: 'Nerox Guard • Sistema de Seguridad y Soporte', iconURL: client.user.displayAvatarURL() })
+            .setTimestamp();
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('open_ticket').setLabel('Abrir Ticket').setEmoji('📩').setStyle(ButtonStyle.Secondary)
+        );
+
+        await interaction.reply({ content: '✅ Panel enviado correctamente.', ephemeral: true });
+        return interaction.channel.send({ embeds: [embedPanel], components: [row] });
     }
 
-    // --- MANEJO DE BOTONES (Tickets, Reclamar, Cerrar) ---
+    // --- 4.2. MANEJO DE BOTONES ---
     if (interaction.isButton()) {
         const { customId, member, guild, channel } = interaction;
 
-        // 1. Creación del Ticket
+        // BOTÓN: ABRIR TICKET
         if (customId === 'open_ticket') {
             await interaction.deferReply({ ephemeral: true });
 
-            // Evitar que abran múltiples tickets si ya existe uno (Opcional, basado en el nombre del canal)
-            const channelName = `ticket-${member.user.username.toLowerCase()}`.replace(/[^a-z0-9-]/g, '');
+            const channelName = `ticket-${member.id}`;
             const existingChannel = guild.channels.cache.find(c => c.name === channelName);
 
             if (existingChannel) {
                 return interaction.editReply({ content: `❌ Ya tienes un ticket abierto en ${existingChannel}.` });
             }
 
-            // Crear el canal de ticket de forma privada
             const ticketChannel = await guild.channels.create({
                 name: channelName,
-                type: 0, // GuildText
+                type: 0, 
+                parent: CATEGORY_ID, 
                 permissionOverwrites: [
-                    {
-                        id: guild.id,
-                        deny: ['ViewChannel'], // Oculto para todos
-                    },
-                    {
-                        id: member.id,
-                        allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'AttachFiles'], // Permisos al creador
-                    },
-                    {
-                        id: STAFF_ROLE_ID,
-                        allow: ['ViewChannel', 'SendMessages', 'ReadMessageHistory', 'AttachFiles'], // Permisos al Staff
-                    }
+                    { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+                    { id: member.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles] },
+                    { id: STAFF_ROLE_ID, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles] }
                 ],
             });
 
+            // Guardamos los metadatos iniciales del ticket mapeados al ID del canal para rastrear el Staff después
+            ticketCache.set(ticketChannel.id, { userId: member.id, staffId: null });
+
             const embedTicket = new EmbedBuilder()
                 .setTitle('══『 Ticket Creado 』══')
-                .setDescription(
-                    `Hola ${member},\n\n` +
-                    'Gracias por contactar con el soporte. El equipo de soporte se pondrá en contacto contigo lo antes posible.\n\n' +
-                    'Por favor, ve detallando tu consulta, reporte o duda junto con las capturas/IDs necesarias para agilizar el proceso.'
-                )
+                .setDescription(`Hola ${member},\n\nGracias por contactar con soporte. El equipo se pondrá en contacto contigo lo antes posible.\n\nPor favor, ve detallando tu consulta o reporte.`)
                 .setColor('#0b0b0b')
                 .addFields(
                     { name: '👤 Usuario:', value: `${member.user.tag} (\`${member.id}\`)`, inline: true },
@@ -159,40 +140,34 @@ client.on('interactionCreate', async (interaction) => {
                 .setTimestamp();
 
             const actionRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId('claim_ticket')
-                    .setLabel('Reclamar')
-                    .setEmoji('👤')
-                    .setStyle(ButtonStyle.Success),
-                new ButtonBuilder()
-                    .setCustomId('close_ticket')
-                    .setLabel('Cerrar')
-                    .setEmoji('🔒')
-                    .setStyle(ButtonStyle.Danger)
+                new ButtonBuilder().setCustomId('claim_ticket').setLabel('Reclamar').setEmoji('👤').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId('close_ticket').setLabel('Cerrar').setEmoji('🔒').setStyle(ButtonStyle.Danger)
             );
 
             await ticketChannel.send({ content: `${member} | <@&${STAFF_ROLE_ID}>`, embeds: [embedTicket], components: [actionRow] });
             return interaction.editReply({ content: `✅ Tu ticket ha sido creado con éxito en ${ticketChannel}` });
         }
 
-        // 2. Reclamar Ticket
+        // BOTÓN: RECLAMAR TICKET
         if (customId === 'claim_ticket') {
-            // Validación estricta de Staff
             if (!member.roles.cache.has(STAFF_ROLE_ID)) {
                 return interaction.reply({ content: '❌ No tienes permisos para reclamar este ticket.', ephemeral: true });
             }
 
             await interaction.deferUpdate();
 
-            // Editar el embed original para reflejar el reclamo
+            // Actualizamos la caché en memoria agregando qué staff reclamó este canal específico
+            const currentData = ticketCache.get(channel.id) || { userId: channel.name.split('-')[1], staffId: null };
+            currentData.staffId = member.id;
+            ticketCache.set(channel.id, currentData);
+
             const originalEmbed = interaction.message.embeds[0];
             const updatedEmbed = EmbedBuilder.from(originalEmbed)
-                .setColor('#2f3136')
+                .setColor('#1a1a1a')
                 .spliceFields(1, 1, { name: '🔒 Estado:', value: `👤 Reclamado por ${member.user}`, inline: true });
 
-            // Deshabilitar el botón de reclamar, mantener el de cerrar
             const updatedRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('claim_ticket').setLabel('Reclamado').setEmoji('✅').setStyle(ButtonStyle.Success).setDisabled(true),
+                new ButtonBuilder().setCustomId('claimed_disabled').setLabel('Reclamado').setEmoji('✅').setStyle(ButtonStyle.Success).setDisabled(true),
                 new ButtonBuilder().setCustomId('close_ticket').setLabel('Cerrar').setEmoji('🔒').setStyle(ButtonStyle.Danger)
             );
 
@@ -200,39 +175,155 @@ client.on('interactionCreate', async (interaction) => {
             return channel.send({ content: `📌 El ticket ha sido tomado por el agente de soporte ${member.user}.` });
         }
 
-        // 3. Cerrar Ticket (Con sistema de Logs)
+        // BOTÓN: CERRAR TICKET
         if (customId === 'close_ticket') {
-            // Validación estricta de Staff
             if (!member.roles.cache.has(STAFF_ROLE_ID)) {
                 return interaction.reply({ content: '❌ No tienes permisos para cerrar este ticket.', ephemeral: true });
             }
 
-            await interaction.reply({ content: '🔒 Cerrando el ticket de manera permanente en 5 segundos...' });
+            await interaction.reply({ content: '🔒 Bloqueando ticket, enviando solicitud de reseña y eliminando canal...' });
 
-            // Sistema de Logs antes de borrar el canal
-            setTimeout(async () => {
-                const logChannel = guild.channels.cache.get(LOGS_CHANNEL_ID);
-                
-                if (logChannel) {
-                    const embedLog = new EmbedBuilder()
-                        .setTitle('══『 Log: Ticket Cerrado 』══')
-                        .setColor('#ff4747')
-                        .addFields(
-                            { name: '📝 Canal:', value: `\`${channel.name}\``, inline: true },
-                            { name: '👤 Cerrado por:', value: `${member.user.tag} (\`${member.id}\`)`, inline: true }
+            // Extraemos de forma segura los datos guardados en el Map usando el ID del canal
+            const channelData = ticketCache.get(channel.id) || { userId: channel.name.split('-')[1], staffId: null };
+            const { userId, staffId } = channelData;
+
+            // Guardamos en memoria indexado por el ID del usuario para cuando responda en sus DMs
+            ticketCache.set(`review_${userId}`, { staffId: staffId || "none" });
+
+            try {
+                const targetUser = await client.users.fetch(userId);
+                if (targetUser) {
+                    const embedDM = new EmbedBuilder()
+                        .setTitle('⭐ Tu ticket ha sido resuelto')
+                        .setDescription(
+                            staffId 
+                            ? `El miembro del staff <@${staffId}> ha finalizado tu atención.\n\nSi lo deseas, deja una reseña pulsando el botón de abajo.`
+                            : `Tu ticket ha sido finalizado por el equipo de soporte.\n\nSi lo deseas, deja una reseña pulsando el botón de abajo.`
                         )
+                        .setColor('#0b0b0b')
                         .setTimestamp();
-                    
-                    try { logChannel.send({ embeds: [embedLog] }); } catch (e) { console.error(e); }
+
+                    // El customId se mantiene totalmente limpio y corto
+                    const dmRow = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId('trigger_review')
+                            .setLabel('Dejar reseña')
+                            .setEmoji('⭐')
+                            .setStyle(ButtonStyle.Secondary)
+                    );
+
+                    await targetUser.send({ embeds: [embedDM], components: [dmRow] });
+                }
+            } catch (dmError) {
+                console.log(`[DM INFO] El usuario ${userId} tiene los DMs bloqueados.`);
+            }
+
+            // Registrar cierre en logs del servidor
+            const logChannel = guild.channels.cache.get(LOGS_CHANNEL_ID);
+            if (logChannel && logChannel.isTextBased()) {
+                const embedLog = new EmbedBuilder()
+                    .setTitle('══『 Log: Ticket Cerrado 』══')
+                    .setColor('#ff4747')
+                    .addFields(
+                        { name: '📝 Canal:', value: `\`${channel.name}\``, inline: true },
+                        { name: '👤 Cerrado por:', value: `${member.user.tag}`, inline: true },
+                        { name: '👮 Staff Asignado:', value: staffId ? `<@${staffId}>` : '*Ninguno*', inline: true }
+                    )
+                    .setTimestamp();
+                await logChannel.send({ embeds: [embedLog] }).catch(() => {});
+            }
+
+            // Limpieza del canal de la caché e infraestructura
+            ticketCache.delete(channel.id);
+            setTimeout(async () => {
+                await channel.delete().catch(err => console.error("Error al borrar canal:", err));
+            }, 3000);
+            return;
+        }
+
+        // BOTÓN EN EL DM: DISPARAR EL MODAL
+        if (customId === 'trigger_review') {
+            const modal = new ModalBuilder()
+                .setCustomId('submit_review')
+                .setTitle('Reseña de Soporte Técnico');
+
+            const ratingInput = new TextInputBuilder()
+                .setCustomId('rating_field')
+                .setLabel('Calificación (Elige un número del 1 al 5)')
+                .setStyle(TextInputStyle.Short)
+                .setPlaceholder('Ejemplo: 5')
+                .setMinLength(1)
+                .setMaxLength(1)
+                .setRequired(true);
+
+            const commentInput = new TextInputBuilder()
+                .setCustomId('comment_field')
+                .setLabel('Cuéntanos tu experiencia')
+                .setStyle(TextInputStyle.Paragraph)
+                .setPlaceholder('Escribe tus comentarios aquí...')
+                .setRequired(true);
+
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(ratingInput),
+                new ActionRowBuilder().addComponents(commentInput)
+            );
+
+            return interaction.showModal(modal);
+        }
+    }
+
+    // --- 4.3. SUBMIT DEL MODAL DESDE EL DM ---
+    if (interaction.isModalSubmit() && interaction.customId === 'submit_review') {
+        await interaction.deferReply({ ephemeral: true });
+
+        const userId = interaction.user.id;
+        // Buscamos los datos del staff asociados al ID del usuario que interactúa desde sus DMs
+        const cachedReviewData = ticketCache.get(`review_${userId}`) || { staffId: "none" };
+        const { staffId } = cachedReviewData;
+
+        const rawRating = interaction.fields.getTextInputValue('rating_field');
+        const comment = interaction.fields.getTextInputValue('comment_field');
+
+        let ratingNum = parseInt(rawRating) || 5;
+        if (ratingNum < 1) ratingNum = 1;
+        if (ratingNum > 5) ratingNum = 5;
+
+        const stars = '★'.repeat(ratingNum) + '☆'.repeat(5 - ratingNum);
+
+        try {
+            const reviewsChannel = await client.channels.fetch(REVIEWS_CHANNEL_ID);
+            if (reviewsChannel && reviewsChannel.isTextBased()) {
+                const embedReview = new EmbedBuilder()
+                    .setTitle('⭐ Nueva reseña de soporte')
+                    .setColor('#0b0b0b')
+                    .addFields(
+                        { name: '👤 Usuario:', value: `<@${userId}>`, inline: true },
+                        { name: '👮 Staff:', value: staffId !== "none" ? `<@${staffId}>` : '*No asignado*', inline: true },
+                        { name: '⭐ Calificación:', value: `${stars} (${ratingNum}/5)`, inline: false },
+                        { name: '📝 Comentario:', value: `\`\`\`text\n${comment}\n\`\`\``, inline: false },
+                        { name: '🕒 Fecha:', value: '05/07/2026', inline: true }
+                    )
+                    .setTimestamp();
+
+                await reviewsChannel.send({ embeds: [embedReview] });
+                
+                if (interaction.message) {
+                    await interaction.message.edit({ components: [] }).catch(() => {});
                 }
 
-                await channel.delete().catch(err => console.error("Error al borrar el canal:", err));
-            }, 5000);
+                // Borramos de memoria la reseña procesada para mantener la RAM limpia
+                ticketCache.delete(`review_${userId}`);
+
+                return interaction.editReply({ content: '✅ ¡Muchas gracias! Tu reseña ha sido enviada con éxito al servidor.' });
+            }
+        } catch (error) {
+            console.error("[REVIEWS ERROR]", error);
+            return interaction.editReply({ content: '❌ Hubo un error al procesar y enviar la reseña al servidor.' });
         }
     }
 });
 
 // ==========================================
-// 5. LOGIN DEL BOT
+// 5. LOGIN DEL CLIENTE
 // ==========================================
 client.login(process.env.TOKEN);
