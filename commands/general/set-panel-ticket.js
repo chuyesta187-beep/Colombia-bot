@@ -7,6 +7,9 @@ const {
   PermissionFlagsBits
 } = require('discord.js');
 
+// 🔒 ROL STAFF
+const staffRoleId = "1522834090506719302";
+
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('set-panel-ticket')
@@ -79,5 +82,30 @@ Selecciona una opción para abrir un ticket.
       content: '✅ Panel de tickets creado correctamente',
       ephemeral: true
     });
+  }
+};
+
+// 🔥 INTERACCIONES (CERRAR TICKET)
+module.exports.interactionCreate = async (interaction) => {
+
+  if (!interaction.isButton()) return;
+
+  if (interaction.customId === 'ticket_close') {
+
+    if (!interaction.member.roles.cache.has(staffRoleId)) {
+      return interaction.reply({
+        content: "❌ Solo el staff puede cerrar tickets.",
+        ephemeral: true
+      });
+    }
+
+    await interaction.reply({
+      content: "🔒 Cerrando ticket...",
+      ephemeral: true
+    });
+
+    setTimeout(() => {
+      interaction.channel.delete().catch(() => {});
+    }, 3000);
   }
 };
