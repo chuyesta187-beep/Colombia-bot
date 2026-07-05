@@ -10,23 +10,24 @@ const {
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('set-panel-ticket')
-    .setDescription('Crea el panel de tickets en el canal')
+    .setDescription('Crea el panel de tickets')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction) {
 
     const embed = new EmbedBuilder()
-      .setTitle('🎫 CENTRO DE SOPORTE')
+      .setTitle('🎫・CENTRO DE SOPORTE')
       .setColor('Blue')
       .setDescription(`
-🛠️ Soporte General
-🚨 Reportar Usuario
-🛡️ Reportar Staff
-🤝 Ally / Affy
-⚖️ Apelar Sanción
-📁 Otros
+🛠️ Soporte General  
+🚨 Reportar Usuario  
+🛡️ Reportar Staff  
+🤝 Alianzas / Afiliaciones  
+⚖️ Apelar Sanción  
+📁 Otros  
 
-Selecciona una opción para abrir un ticket privado.
+━━━━━━━━━━━━━━━━━━━━━━
+Selecciona una opción para abrir un ticket.
       `);
 
     const row1 = new ActionRowBuilder().addComponents(
@@ -52,7 +53,7 @@ Selecciona una opción para abrir un ticket privado.
     const row2 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('ticket_alliance')
-        .setLabel('Ally / Affy')
+        .setLabel('Alianzas')
         .setStyle(ButtonStyle.Success)
         .setEmoji('🤝'),
 
